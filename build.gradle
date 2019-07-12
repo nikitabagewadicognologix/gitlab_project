@@ -1,0 +1,70 @@
+apply plugin: 'java'
+apply plugin: 'eclipse'
+apply plugin: 'idea'
+apply plugin: 'maven'
+
+description = 'Groovy and Gradle Examples Project'
+group 'io.pivotal'
+version '1.0.0.BUILD-SNAPSHOT'
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compile "org.assertj:assertj-core:$assertjVersion"
+    compile "org.slf4j:slf4j-api:$slf4jVersion"
+    runtime "org.slf4j:slf4j-simple:$slf4jVersion"
+    testCompile group: 'junit', name: 'junit', version: "$junitVersion"
+}
+
+def reservePort() {
+    def serverSocket = new ServerSocket(0);
+    def port = serverSocket.localPort;
+    serverSocket.close();
+    port;
+}
+
+task runEchoServer() {
+    doLast {
+        ext.port = reservePort()
+
+        println "Running EchoServer on port [$port]..."
+
+        def out = new StringBuilder()
+        def err = new StringBuilder()
+
+        String classpath = sourceSets.main.runtimeClasspath.collect { it }.join(File.pathSeparator)
+
+        String[] commandLine = [
+            'java', '-server', '-ea', '-classpath', classpath,
+            '-Dexample.app.server.run=false',
+            'example.app.server.EchoServer',
+            "$port"
+        ]
+
+        println commandLine
+
+        ext.process = commandLine.execute()
+        //ext.process = new ProcessBuilder().command(commandLine).redirectErrorStream(true).start();
+
+        ext.process.consumeProcessOutput(out, err);
+
+        println 'OUT: ' + out
+        println 'ERROR: ' + err
+    }
+}
+
+test {
+    dependsOn runEchoServer
+    doFirst {
+        systemProperties['example.app.server.port'] = runEchoServer.port
+    }
+    doLast {
+        println 'Stopping EchoServer...'
+        runEchoServer.process?.destroyForcibly()
+    }
+}
